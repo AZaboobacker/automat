@@ -1,78 +1,155 @@
 import streamlit as st
+from streamlit_folium import folium_static
+import folium
 import pandas as pd
-import matplotlib.pyplot as plt
-from datetime import datetime
+import datetime as dt
+import sqlite3
+from PIL import Image
+import requests
+from io import BytesIO
+import base64
 
-# Custom CSS for sleek look
-st.markdown(
-    "<style>\n"
-    "body {background-color: #f4f4f9; font-family: 'Helvetica Neue', sans-serif;}\n"
-    ".sidebar .sidebar-content {background: #333; color: #fff;}\n"
-    "</style>",
-    unsafe_allow_html=True
-)
+# CSS
+st.markdown('''
+<style>
+body {
+    font-family: 'Arial', sans-serif;
+    background-color: #f5f5f5;
+    color: #333333;
+}
 
-# Set up app
-st.set_page_config(page_title='Financial Budgeting App', page_icon=':moneybag:')
+.sidebar .sidebar-content {
+    background-color: #2e3b4e;
+    color: #ffffff;
+}
 
-# Setup navigation
-st.sidebar.title("Navigation")
-selection = st.sidebar.radio("Go to", ["Income", "Expenses", "Summary"])
+h1, h2, h3, h4, h5, h6 {
+    color: #2e3b4e;
+}
 
-# Initialize session state variables if not already set
-if 'income_data' not in st.session_state:
-    st.session_state['income_data'] = []
-    st.session_state['expense_data'] = []
+.stButton>button {
+   background-color: #4CAF50;
+   color:white;
+}
 
-# Functions to add entries
+.stButton>button:hover {
+   background-color: #45a049;
+}
 
-def add_income(date, source, amount):
-    st.session_state['income_data'].append({"date": date, "source": source, "amount": amount})
+footer {
+    visibility: hidden;
+}
 
-def add_expense(date, category, amount):
-    st.session_state['expense_data'].append({"date": date, "category": category, "amount": amount})
+footer:after {
+    content: 'Streamlit App - All Rights Reserved'; 
+    visibility: visible;
+    display: block;
+    position: relative;
+    padding: 15px;
+    top: 2px;
+}
+</style>
+''', unsafe_allow_html=True)
+
+# Connect to SQLite database
+conn = sqlite3.connect('hikes.db')
+c = conn.cursor()
+c.execute('''CREATE TABLE IF NOT EXISTS hikes
+            (id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT,
+            date DATE,
+            location TEXT,
+            distance REAL,
+            duration REAL,
+            description TEXT)''')
+conn.commit()
+
+# Function to fetch hikes from the database
+def get_hikes():
+    c.execute('SELECT * FROM hikes')
+    data = c.fetchall()
+    return pd.DataFrame(data, columns=["ID", "Name", "Date", "Location", "Distance", "Duration", "Description"])
+
+# Function to add hike to the database
+def add_hike(name, date, location, distance, duration, description):
+    c.execute('INSERT INTO hikes (name, date, location, distance, duration, description) VALUES (?, ?, ?, ?, ?, ?)',
+              (name, date, location, distance, duration, description))
+    conn.commit()
 
 # Pages
-if selection == "Income":
-    st.title('Income')
-    date = st.date_input('Date')
-    source = st.text_input('Source')
-    amount = st.number_input('Amount', min_value=0.0, format='%f')
-    if st.button('Add Income'):
-        add_income(date, source, amount)
-        st.success('Income added successfully!')
-    st.write(pd.DataFrame(st.session_state['income_data']))
+def home():
+    st.title("Welcome to Your Hike Tracker!")
+    st.image('https://source.unsplash.com/1600x900/?hiking', use_column_width=True)
+    intro_text = """ This application helps you discover new hiking trails and record your adventures. Get ready to explore the great outdoors! """
+    st.markdown(intro_text)
 
-elif selection == "Expenses":
-    st.title('Expenses')
-    date = st.date_input('Date')
-    category = st.text_input('Category')
-    amount = st.number_input('Amount', min_value=0.0, format='%f')
-    if st.button('Add Expense'):
-        add_expense(date, category, amount)
-        st.success('Expense added successfully!')
-    st.write(pd.DataFrame(st.session_state['expense_data']))
+    if st.button("Find Hikes"):
+        st.session_state.page = 'find_hikes'
 
-elif selection == "Summary":
-    st.title('Summary')
-    df_income = pd.DataFrame(st.session_state['income_data'])
-    df_expenses = pd.DataFrame(st.session_state['expense_data'])
-    total_income = df_income['amount'].sum() if not df_income.empty else 0
-    total_expenses = df_expenses['amount'].sum() if not df_expenses.empty else 0
-    remaining_budget = total_income - total_expenses
+    if st.button("Record a Hike"):
+        st.session_state.page = 'record_hike'
 
-    st.markdown(f'**Total Income:** ${total_income:.2f}')
-    st.markdown(f'**Total Expenses:** ${total_expenses:.2f}')
-    st.markdown(f'**Remaining Budget:** ${remaining_budget:.2f}')
+    if st.button("View Recorded Hikes"):
+        st.session_state.page = 'view_hikes'
 
-    # Line Plot
-    df_income['date'] = pd.to_datetime(df_income['date'])
-    df_expenses['date'] = pd.to_datetime(df_expenses['date'])
-    plt.figure(figsize=(10, 5))
-    plt.plot(df_income['date'], df_income['amount'], label='Income', color='green')
-    plt.plot(df_expenses['date'], df_expenses['amount'], label='Expenses', color='red')
-    plt.xlabel('Date')
-    plt.ylabel('Amount')
-    plt.title('Financial Summary')
-    plt.legend()
-    st.pyplot(plt)
+    if st.session_state.page:
+        pages[st.session_state.page]()
+
+
+def find_hikes():
+    st.title("Find Hikes")
+    location = st.text_input("Enter location:")
+
+    if st.button("Search"):
+        # Simulated search
+        map_loc = folium.Map(location=[37.7749, -122.4194], zoom_start=12)
+        folium.Marker([37.7749, -122.4194], tooltip='Cool Hike 1').add_to(map_loc)
+        folium.Marker([37.7849, -122.4294], tooltip='Cool Hike 2').add_to(map_loc)
+        folium_static(map_loc)
+
+    if st.button("Back to Home"):
+        st.session_state.page = 'home'
+        home()
+
+
+def record_hike():
+    st.title("Record a Hike")
+    name = st.text_input("Hike Name:")
+    date = st.date_input("Date:", dt.date.today())
+    location = st.text_input("Location:")
+    distance = st.number_input("Distance (km):", min_value=0.0, format="%.1f")
+    duration = st.number_input("Duration (hours):", min_value=0.0, format="%.1f")
+    description = st.text_area("Description:")
+
+    if st.button("Submit"):
+        add_hike(name, date, location, distance, duration, description)
+        st.success("Hike Recorded Successfully!")
+
+    if st.button("Back to Home"):
+        st.session_state.page = 'home'
+        home()
+
+
+def view_hikes():
+    st.title("View Recorded Hikes")
+
+    hikes_df = get_hikes()
+    st.dataframe(hikes_df)
+
+    if st.button("Back to Home"):
+        st.session_state.page = 'home'
+        home()
+
+# Navigation
+pages = {
+    "home": home,
+    "find_hikes": find_hikes,
+    "record_hike": record_hike,
+    "view_hikes": view_hikes
+}
+
+if 'page' not in st.session_state:
+    st.session_state.page = 'home'
+
+# Load Initial Page
+home()
