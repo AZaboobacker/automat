@@ -1,90 +1,78 @@
 import streamlit as st
-from PIL import Image
-import matplotlib.pyplot as plt
-import seaborn as sns
 import pandas as pd
-import numpy as np
+import matplotlib.pyplot as plt
+from datetime import datetime
 
-# Custom CSS for a sleek and modern look
+# Custom CSS for sleek look
 st.markdown(
-    """
-    <style>
-    body {
-        background-color: #F5F5F5;
-        font-family: 'Helvetica Neue', sans-serif;
-    }
-    .main-title {
-        font-size: 48px;
-        color: #4e73df;
-        text-align: center;
-        margin-bottom: 16px;
-    }
-    .menu-title {
-        font-size: 24px;
-        font-weight: bold;
-        color: #2e59d9;
-        margin-bottom: 12px;
-    }
-    .card {
-        background: white;
-        border-radius: 10px;
-        padding: 20px; 
-        margin-bottom: 20px;
-        box-shadow: 0 4px 8px 0 rgba(0,0,0,0.2);
-        transition: 0.3s;
-    }
-    .card:hover {
-        box-shadow: 0 8px 16px 0 rgba(0,0,0,0.2);
-    }
-    .button {
-        background-color: #4e73df;
-        color: white;
-        padding: 12px 24px;
-        border: none;
-        border-radius: 5px;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-    }
-    .button:hover {
-        background-color: #2e59d9;
-    }
-    </style>
-    """,
+    "<style>\n"
+    "body {background-color: #f4f4f9; font-family: 'Helvetica Neue', sans-serif;}\n"
+    ".sidebar .sidebar-content {background: #333; color: #fff;}\n"
+    "</style>",
     unsafe_allow_html=True
 )
 
-# Create sidebar menu
+# Set up app
+st.set_page_config(page_title='Financial Budgeting App', page_icon=':moneybag:')
+
+# Setup navigation
 st.sidebar.title("Navigation")
-selection = st.sidebar.radio("Go to", ["Dashboard", "Income", "Expenses", "Summary"])
+selection = st.sidebar.radio("Go to", ["Income", "Expenses", "Summary"])
 
-# Title
-st.markdown('<h1 class="main-title">Financial Budgeting App</h1>', unsafe_allow_html=True)
+# Initialize session state variables if not already set
+if 'income_data' not in st.session_state:
+    st.session_state['income_data'] = []
+    st.session_state['expense_data'] = []
 
-# Dashboard Page
-if selection == "Dashboard":
-    st.markdown('<h2 class="menu-title">Dashboard</h2>', unsafe_allow_html=True)
-    st.markdown('<div class="card">Overview of your financial status:</div>', unsafe_allow_html=True)
-    df = pd.DataFrame(np.random.randn(50, 3), columns=['Income', 'Expenses', 'Savings'])
-    st.line_chart(df)
+# Functions to add entries
 
-# Income Page
-elif selection == "Income":
-    st.markdown('<h2 class="menu-title">Income</h2>', unsafe_allow_html=True)
-    st.markdown('<div class="card">Record your income sources:</div>', unsafe_allow_html=True)
-    st.text_input("Source of Income:")
-    st.number_input("Amount:")
-    st.button("Add Income", key="income_button", css_class='button')
+def add_income(date, source, amount):
+    st.session_state['income_data'].append({"date": date, "source": source, "amount": amount})
 
-# Expenses Page
+def add_expense(date, category, amount):
+    st.session_state['expense_data'].append({"date": date, "category": category, "amount": amount})
+
+# Pages
+if selection == "Income":
+    st.title('Income')
+    date = st.date_input('Date')
+    source = st.text_input('Source')
+    amount = st.number_input('Amount', min_value=0.0, format='%f')
+    if st.button('Add Income'):
+        add_income(date, source, amount)
+        st.success('Income added successfully!')
+    st.write(pd.DataFrame(st.session_state['income_data']))
+
 elif selection == "Expenses":
-    st.markdown('<h2 class="menu-title">Expenses</h2>', unsafe_allow_html=True)
-    st.markdown('<div class="card">Track your expenses:</div>', unsafe_allow_html=True)
-    st.text_input("Type of Expense:")
-    st.number_input("Amount:")
-    st.button("Add Expense", key="expense_button", css_class='button')
+    st.title('Expenses')
+    date = st.date_input('Date')
+    category = st.text_input('Category')
+    amount = st.number_input('Amount', min_value=0.0, format='%f')
+    if st.button('Add Expense'):
+        add_expense(date, category, amount)
+        st.success('Expense added successfully!')
+    st.write(pd.DataFrame(st.session_state['expense_data']))
 
-# Summary Page
 elif selection == "Summary":
-    st.markdown('<h2 class="menu-title">Summary</h2>', unsafe_allow_html=True)
-    st.markdown('<div class="card">Summary of your financial status:</div>', unsafe_allow_html=True)
-    df_summary = pd.DataFrame({"Categories": ["Income", "Expenses", "Savings"], "Amount": [5000, 2000, 3000]})
-    st.bar_chart(df_summary.set_index('Categories'))
+    st.title('Summary')
+    df_income = pd.DataFrame(st.session_state['income_data'])
+    df_expenses = pd.DataFrame(st.session_state['expense_data'])
+    total_income = df_income['amount'].sum() if not df_income.empty else 0
+    total_expenses = df_expenses['amount'].sum() if not df_expenses.empty else 0
+    remaining_budget = total_income - total_expenses
+
+    st.markdown(f'**Total Income:** ${total_income:.2f}')
+    st.markdown(f'**Total Expenses:** ${total_expenses:.2f}')
+    st.markdown(f'**Remaining Budget:** ${remaining_budget:.2f}')
+
+    # Line Plot
+    df_income['date'] = pd.to_datetime(df_income['date'])
+    df_expenses['date'] = pd.to_datetime(df_expenses['date'])
+    plt.figure(figsize=(10, 5))
+    plt.plot(df_income['date'], df_income['amount'], label='Income', color='green')
+    plt.plot(df_expenses['date'], df_expenses['amount'], label='Expenses', color='red')
+    plt.xlabel('Date')
+    plt.ylabel('Amount')
+    plt.title('Financial Summary')
+    plt.legend()
+    st.pyplot(plt)
